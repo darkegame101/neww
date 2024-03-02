@@ -1,0 +1,835 @@
+// ==UserScript==
+// @name         CỬU GIỚI
+// @namespace    http://example.com/
+// @version      3.1.6.1
+// @description  Nhẹ nhàng như mộng , mộng diệc phiêu
+// @author       ๖ۣۜHL Thanh Longঔ
+// @match        *://cmangaot.com/user/*
+// @icon         *://i.imgur.com/jYWf4CX.png
+// @grant        GM_xmlhttpRequest
+// @grant        GM_addStyle
+// ==/UserScript==
+//-----KHAI BÁO CỐ ĐỊNH----//
+let isReturn;
+let isNum;
+let countLum;
+let guildQuest;
+let guildQuestID;
+let isLog;
+let delay = 0;
+let block = false;
+let isBlockTaiPhu;
+let countError = 0;
+let viTriVP = 9999;
+const maxError = 10;
+let isBlockLog = false;
+var delayLum = new Map();
+const link = window.location.href
+var keysToRemove = ['TOKEN', 'HISTORY'];
+for (var key in localStorage) {
+    if (localStorage.hasOwnProperty(key) && keysToRemove.indexOf(key) === -1) {
+        localStorage.removeItem(key);
+    }
+}
+GM_addStyle('.popup_content { display: none !important; }');
+GM_addStyle('.frame_content { display: none !important; }');
+localStorage.setItem('countLum', 0);
+//----END----//
+(function() {
+    if (!link.includes('cmanga')) return
+    const domainRegex = /^(.*:\/\/[^\/]+)/;
+    const matches = link.match(domainRegex);
+    const URL =matches[1]
+    const refeLink = `${URL}/user/user_game_dashboard`
+    //-----------------------------------------------------------------
+   //*Lưu ý: Nếu đi Tân Thủ thì loaiCuuGioi = 1 và defender = 0 (bắt buộc)
+    const outLimit = 5000 // dùng khi limitGoldOut = 0
+    const limitGoldOut = 5000 // giới hạn tài Phú, max 10k ; 0 = ưu tiên vp, không lụm vàng + lt
+    const loaiCuuGioi = 1 //1 Tân Thủ - 2 BĂNG - 3 HOẢ - 4 Minh
+    const defender = 0 // 0 là không làm gì, 1 là đấm, 2 là chạy
+    const continuePlay = 'NO' // yes là đủ limitGoldOut vẫn chạy tiếp, NO là out, 10k tài vẫn out
+    const gocChay = 4 //1 = gocTrenTrai ; 2 = gocTrenPhai; 3 = duoiTrai; 4 phai - thiết lập khi mới vào 9G
+
+    const ID = 10643 ; //ID lấy trong #id nhân vật
+    let token = '';// cố định
+    let chapterToken = `${token}&player=${ID}`;// cố định
+    //======FUNTION========
+    async function mainData() {
+        if (token == '' || isLog == 'true'){return}
+        if (delayLum.get(ID) > new Date().getTime() && loaiCuuGioi == 1) {
+            return;
+        }
+        try {
+            const responseP = await fetch(`${URL}/api/battle_map_player_data?token_character=${chapterToken}&type=word`);
+            const dataP = await responseP.json();
+            const response = await fetch(`${URL}/api/battle_map_position_data?token_character=${chapterToken}&type=word`);
+            const data = await response.json();
+            const position1 = data[0] ? parseInt(data[0].position) : 0;
+            const position2 = data[1] ? parseInt(data[1].position) : 0;
+            const position3 = data[2] ? parseInt(data[2].position) : 0;
+            const position4 = data[3] ? parseInt(data[3].position) : 0;
+            const position5 = data[4] ? parseInt(data[4].position) : 0;
+            const position6 = data[5] ? parseInt(data[5].position) : 0;
+            const position7 = data[6] ? parseInt(data[6].position) : 0;
+            const position8 = data[7] ? parseInt(data[7].position) : 0;
+            for (const item of data) {
+                const jsonData = JSON.parse(item.data);
+                const target = jsonData.target;
+                if (target == 'player' && loaiCuuGioi > 1) {
+                    if (defender === 1) {
+                        console.log(` ☞ Phát hiện Shipper tại [${item.position}]`);
+                        document.getElementById(`battle_position_${item.position}`).click();
+                        return
+                    } else if (defender === 0) {
+                        console.log(` ☞ Phát hiện Shipper tại [${item.position}] (bỏ qua)`);
+                        const randomIndex = randomResultAll(parseInt(item.position), position1, position2, position3, position4, position5, position6, position7, position8);
+                        document.getElementById(`battle_position_${randomIndex}`).click();
+                        return
+                    } else if (defender == 2){
+                        const viTriMe = await layThongTin(data, item.position, dataP, position1, position2, position3, position4, position5, position6, position7, position8)
+                        console.log(` ➙ ⚠️⚠️⚠️ ${viTriMe}`)
+                        if (viTriMe == '8canhTren') {
+                            const randomIndex = randomResult(viTriVP, position6, position7, position8);
+                            console.log(` ➙ Trốn ._. : ${randomIndex}`)
+                            document.getElementById(`battle_position_${randomIndex}`).click();
+                        }
+                        if (viTriMe == '8canhPhai') {
+                            const randomIndex = randomResult(viTriVP, position1, position4, position6);
+                            console.log(` ➙ Trốn ._. : ${randomIndex}`)
+                            document.getElementById(`battle_position_${randomIndex}`).click();
+                        }
+                        if (viTriMe == '8canhDuoi') {
+                            const randomIndex = randomResult(viTriVP, position1, position2, position3);
+                            console.log(` ➙ Trốn ._. : ${randomIndex}`)
+                            document.getElementById(`battle_position_${randomIndex}`).click();
+                        }
+                        if (viTriMe == '8canhTrai') {
+                            const randomIndex = randomResult(viTriVP, position3, position5, position8);
+                            console.log(` ➙ Trốn ._. : ${randomIndex}`)
+                            document.getElementById(`battle_position_${randomIndex}`).click();
+                        }
+                        if (viTriMe == '5canhTrenTrai') {
+                            const randomIndex = randomResult(viTriVP, position2, position5, position5);
+                            console.log(` ➙ Trốn ._. : ${randomIndex}`)
+                            document.getElementById(`battle_position_${randomIndex}`).click();
+                        }
+                        if (viTriMe == '5canhTrenPhai') {
+                            const randomIndex = randomResult(viTriVP, position1, position3, position3);
+                            console.log(` ➙ Trốn ._. : ${randomIndex}`)
+                            document.getElementById(`battle_position_${randomIndex}`).click();
+                        }
+                        if (viTriMe == '5canhTrenDuoi') {
+                            const randomIndex = randomResult(viTriVP, position1, position2, position1);
+                            console.log(` ➙ Trốn ._. : ${randomIndex}`)
+                            document.getElementById(`battle_position_${randomIndex}`).click();
+                        }
+                        if (viTriMe == '5canhPhaiTren') {
+                            const randomIndex = randomResult(viTriVP, position4, position5, position4);
+                            console.log(` ➙ Trốn ._. : ${randomIndex}`)
+                            document.getElementById(`battle_position_${randomIndex}`).click();
+                        }
+                        if (viTriMe == '5canhPhaiDuoi') {
+                            const randomIndex = randomResult(viTriVP, position1, position2, position1);
+                            console.log(` ➙ Trốn ._. : ${randomIndex}`)
+                            document.getElementById(`battle_position_${randomIndex}`).click();
+                        }
+                        if (viTriMe == '5canhPhaiTrai') {
+                            const randomIndex = randomResult(viTriVP, position1, position2, position5);
+                            console.log(` ➙ Trốn ._. : ${randomIndex}`)
+                            document.getElementById(`battle_position_${randomIndex}`).click();
+                        }
+                        if (viTriMe == '5canhTraiTren') {
+                            const randomIndex = randomResult(viTriVP, position4, position5, position5);
+                            console.log(` ➙ Trốn ._. : ${randomIndex}`)
+                            document.getElementById(`battle_position_${randomIndex}`).click();
+                        }
+                        if (viTriMe == '5canhTraiDuoi') {
+                            const randomIndex = randomResult(viTriVP, position1, position2, position2);
+                            console.log(` ➙ Trốn ._. : ${randomIndex}`)
+                            document.getElementById(`battle_position_${randomIndex}`).click();
+                        }
+                        if (viTriMe == '5canhTraiPhai') {
+                            const randomIndex = randomResult(viTriVP, position1, position4, position4);
+                            console.log(` ➙ Trốn ._. : ${randomIndex}`)
+                            document.getElementById(`battle_position_${randomIndex}`).click();
+                        }
+                        if (viTriMe == '5canhDuoiTrai') {
+                            const randomIndex = randomResult(viTriVP, position3, position5, position3);
+                            console.log(` ➙ Trốn ._. : ${randomIndex}`)
+                            document.getElementById(`battle_position_${randomIndex}`).click();
+                        }
+                        if (viTriMe == '5canhDuoiPhai') {
+                            const randomIndex = randomResult(viTriVP, position1, position4, position1);
+                            console.log(` ➙ Trốn ._. : ${randomIndex}`)
+                            document.getElementById(`battle_position_${randomIndex}`).click();
+                        }
+                        if (viTriMe == '5canhDuoiTren') {
+                            const randomIndex = randomResult(viTriVP, position4, position5, position4);
+                            console.log(` ➙ Trốn ._. : ${randomIndex}`)
+                            document.getElementById(`battle_position_${randomIndex}`).click();
+                        }
+                        return
+                    }
+                }
+                if (delayLum.get(ID) > new Date().getTime()) {
+                    return;
+                }
+                if (jsonData.target_data) {
+                    if ((jsonData.target_data.sign == 'gold' || jsonData.target_data.sign == 'crystal') && isBlockTaiPhu == 'true') continue
+                    if (jsonData.target_data.sign.includes('guild_quest') && parseInt(item.position) == parseInt(guildQuest)){
+                        const randomIndex = randomResultAll(parseInt(item.position), position1, position2, position3, position4, position5, position6, position7, position8);
+                        document.getElementById(`battle_position_${randomIndex}`).click();
+                        return
+                    }
+                    delayLum.set(ID, new Date().getTime() + 65000);
+                    viTriVP = parseInt(item.position)
+                    localStorage.setItem('countLum', parseInt(countLum) + 1);
+                    guildQuestID = parseInt(item.position)
+                    setTimeout(() => {
+                        console.log(`➙ Phát hiện VP tại [${item.position}]`);
+                        document.getElementById(`battle_position_${item.position}`).click();
+                    }, 4000);
+                    return;
+                }
+            }
+            if (data.length == 3 && parseInt(dataP.position) < position1 && dataP.position < position2 && dataP.position < position3 && isNum !== 'true'){
+                localStorage.setItem('isReturn', 'gocTrenTrai');
+                localStorage.setItem('isNum', 'true');
+            }
+            if (data.length == 3 && parseInt(dataP.position) > position1 && dataP.position < position2 && dataP.position < position3 && isNum !== 'true'){
+                localStorage.setItem('isReturn', 'gocTrenPhai');
+                localStorage.setItem('isNum', 'true');
+            }
+            if (data.length == 3 && parseInt(dataP.position) > position1 && dataP.position > position2 && dataP.position < position3 && isNum !== 'true'){
+                localStorage.setItem('isReturn', 'gocDuoiTrai');
+                localStorage.setItem('isNum', 'true');
+            }
+            if (data.length == 3 && parseInt(dataP.position) > position1 && dataP.position > position2 && dataP.position > position3 && isNum !== 'true'){
+                localStorage.setItem('isReturn', 'gocDuoiPhai');
+                localStorage.setItem('isNum', 'true');
+            }
+            if (data.length == 5 && parseInt(dataP.position) > position1 && dataP.position < position2 && dataP.position < position3 && dataP.position < position4 && dataP.position < position5 && isNum !== 'true'){
+                localStorage.setItem('isReturn', 'canhTren');
+                localStorage.setItem('isNum', 'true');
+            }
+            if (data.length == 5 && parseInt(dataP.position) > position1 && dataP.position > position2 && dataP.position > position3 && dataP.position < position4 && dataP.position < position5 && isNum !== 'true'){
+                localStorage.setItem('isReturn', 'canhPhai');
+                localStorage.setItem('isNum', 'true');
+            }
+            if (data.length == 5 && parseInt(dataP.position) > position1 && dataP.position > position2 && dataP.position < position3 && dataP.position < position4 && dataP.position < position5 && isNum !== 'true'){
+                localStorage.setItem('isReturn', 'canhTrai');
+                localStorage.setItem('isNum', 'true');
+            }
+            if (data.length == 5 && parseInt(dataP.position) > position1 && dataP.position > position2 && dataP.position > position3 && dataP.position > position4 && dataP.position < position5 && isNum !== 'true'){
+                localStorage.setItem('isReturn', 'canhDuoi');
+                localStorage.setItem('isNum', 'true');
+            }
+            if (isReturn == 'gocTrenTrai'){
+                if (isNum == 'true'){
+                    const positions = [position1, position2, position3, position4, position5, position6, position7, position8];
+                    const randomIndex = rd(3, 3);
+                    const selectedPosition = positions[randomIndex-1];
+                    document.getElementById(`battle_position_${selectedPosition}`).click(); // +1 để phù hợp với vị trí của mảng (từ 1 đến 8)
+                    console.log(`Tìm... [${selectedPosition}]`);
+                    localStorage.setItem('isNum', 'false');
+                    return;
+                }else{
+                    const positions = [position1, position2, position3, position4, position5, position6, position7, position8];
+                    const randomIndex = random(0, 1, 5, 7, 8);
+                    const selectedPosition = positions[randomIndex-1];
+                    if (selectedPosition == 0 || selectedPosition == '0'){localStorage.setItem('isNum', 'true'); return}
+                    document.getElementById(`battle_position_${selectedPosition}`).click(); // +1 để phù hợp với vị trí của mảng (từ 1 đến 8)
+                    console.log(`Tìm... [${selectedPosition}]`);
+                    localStorage.setItem('isNum', 'false');
+                }
+            } else if (isReturn == 'gocTrenPhai'){
+                if (isNum == 'true'){
+                    const positions = [position1, position2, position3, position4, position5, position6, position7, position8];
+                    const randomIndex = rd(2, 2);
+                    const selectedPosition = positions[randomIndex-1];
+                    document.getElementById(`battle_position_${selectedPosition}`).click(); // +1 để phù hợp với vị trí của mảng (từ 1 đến 8)
+                    console.log(`Tìm... [${selectedPosition}]`);
+                    localStorage.setItem('isNum', 'false');
+                    return;
+                }else{
+                    const positions = [position1, position2, position3, position4, position5, position6, position7, position8];
+                    const randomIndex = random(0, 1, 4, 6, 7);
+                    const selectedPosition = positions[randomIndex-1];
+                    if (selectedPosition == 0 || selectedPosition == '0'){localStorage.setItem('isNum', 'true'); return}
+                    document.getElementById(`battle_position_${selectedPosition}`).click(); // +1 để phù hợp với vị trí của mảng (từ 1 đến 8)
+                    console.log(`Tìm... [${selectedPosition}]`);
+                    localStorage.setItem('isNum', 'false');
+                }
+            }else if (isReturn == 'gocDuoiTrai'){
+                if (isNum == 'true'){
+                    const positions = [position1, position2, position3, position4, position5, position6, position7, position8];
+                    const randomIndex = rd(2, 2);
+                    const selectedPosition = positions[randomIndex-1];
+                    document.getElementById(`battle_position_${selectedPosition}`).click(); // +1 để phù hợp với vị trí của mảng (từ 1 đến 8)
+                    console.log(`Tìm... [${selectedPosition}]`);
+                    localStorage.setItem('isNum', 'false');
+                    return;
+                }else{
+                    const positions = [position1, position2, position3, position4, position5, position6, position7, position8];
+                    const randomIndex = random(0, 1, 2, 3, 5)
+                    const selectedPosition = positions[randomIndex-1];
+                    if (selectedPosition == 0 || selectedPosition == '0'){localStorage.setItem('isNum', 'true'); return}
+                    document.getElementById(`battle_position_${selectedPosition}`).click(); // +1 để phù hợp với vị trí của mảng (từ 1 đến 8)
+                    console.log(`Tìm... [${selectedPosition}]`);
+                    localStorage.setItem('isNum', 'false');
+                }
+            }else if (isReturn == 'gocDuoiPhai'){
+                if (isNum == 'true'){
+                    const positions = [position1, position2, position3, position4, position5, position6, position7, position8];
+                    const randomIndex = rd(1, 1);
+                    const selectedPosition = positions[randomIndex-1];
+                    document.getElementById(`battle_position_${selectedPosition}`).click(); // +1 để phù hợp với vị trí của mảng (từ 1 đến 8)
+                    console.log(`Tìm... [${selectedPosition}]`);
+                    localStorage.setItem('isNum', 'false');
+                    return;
+                }else{
+                    const positions = [position1, position2, position3, position4, position5, position6, position7, position8];
+                    const randomIndex = random(0, 1, 1, 2, 4);
+                    const selectedPosition = positions[randomIndex-1];
+                    if (selectedPosition == 0 || selectedPosition == '0'){localStorage.setItem('isNum', 'true'); return}
+                    document.getElementById(`battle_position_${selectedPosition}`).click(); // +1 để phù hợp với vị trí của mảng (từ 1 đến 8)
+                    console.log(`Tìm... [${selectedPosition}]`);
+                    localStorage.setItem('isNum', 'false');
+                }
+            }else if (isReturn == 'canhTren'){
+                if (isNum == 'true'){
+                    const positions = [position1, position2, position3, position4, position5, position6, position7, position8];
+                    const randomIndex = random(0, 1, 3, 4, 5);//rd(4, 4);
+                    const selectedPosition = positions[randomIndex - 1];
+                    document.getElementById(`battle_position_${selectedPosition}`).click(); // +1 để phù hợp với vị trí của mảng (từ 1 đến 8)
+                    console.log(`Tìm... [${selectedPosition}]`);
+                    localStorage.setItem('isNum', 'false');
+                    return;
+                }else{
+                    const positions = [position1, position2, position3, position4, position5, position6, position7, position8];
+                    const randomIndex = random(0, 1, 6, 7, 8);
+                    const selectedPosition = positions[randomIndex-1];
+                    if (selectedPosition == 0 || selectedPosition == '0'){localStorage.setItem('isNum', 'true'); return}
+                    document.getElementById(`battle_position_${selectedPosition}`).click(); // +1 để phù hợp với vị trí của mảng (từ 1 đến 8)
+                    console.log(`Tìm... [${selectedPosition}]`);
+                    localStorage.setItem('isNum', 'false');
+                }
+            }else if (isReturn == 'canhDuoi'){
+                if (isNum == 'true'){
+                    const positions = [position1, position2, position3, position4, position5, position6, position7, position8];
+                    const randomIndex = random(0, 1, 1, 2, 3);//rd(2, 2);
+                    const selectedPosition = positions[randomIndex - 1];
+                    document.getElementById(`battle_position_${selectedPosition}`).click(); // +1 để phù hợp với vị trí của mảng (từ 1 đến 8)
+                    console.log(`Tìm... [${selectedPosition}]`);
+                    localStorage.setItem('isNum', 'false');
+                    return;
+                }else{
+                    const positions = [position1, position2, position3, position4, position5, position6, position7, position8];
+                    const randomIndex = random(0, 1, 1, 2, 3);
+                    const selectedPosition = positions[randomIndex-1];
+                    if (selectedPosition == 0 || selectedPosition == '0'){localStorage.setItem('isNum', 'true'); return}
+                    document.getElementById(`battle_position_${selectedPosition}`).click(); // +1 để phù hợp với vị trí của mảng (từ 1 đến 8)
+                    console.log(`Tìm... [${selectedPosition}]`);
+                    localStorage.setItem('isNum', 'false');
+                }
+            }else if (isReturn == 'canhPhai'){
+                if (isNum == 'true'){
+                    const positions = [position1, position2, position3, position4, position5, position6, position7, position8];
+                    const randomIndex = random(0, 1, 1, 3, 4);//rd(3, 3);
+                    const selectedPosition = positions[randomIndex-1];
+                    document.getElementById(`battle_position_${selectedPosition}`).click(); // +1 để phù hợp với vị trí của mảng (từ 1 đến 8)
+                    console.log(`Tìm... [${selectedPosition}]`);
+                    localStorage.setItem('isNum', 'false');
+                    return;
+                }else{
+                    const positions = [position1, position2, position3, position4, position5, position6, position7, position8];
+                    const randomIndex = random(0, 1, 1, 4, 6);
+                    const selectedPosition = positions[randomIndex-1];
+                    if (selectedPosition == 0 || selectedPosition == '0'){localStorage.setItem('isNum', 'true'); return}
+                    document.getElementById(`battle_position_${selectedPosition}`).click(); // +1 để phù hợp với vị trí của mảng (từ 1 đến 8)
+                    console.log(`Tìm... [${selectedPosition}]`);
+                    localStorage.setItem('isNum', 'false');
+                }
+            }else if (isReturn == 'canhTrai'){
+                if (isNum == 'true'){
+                    const positions = [position1, position2, position3, position4, position5, position6, position7, position8];
+                    const randomIndex = random(0, 1, 2, 3, 5);//rd(3, 3);
+                    const selectedPosition = positions[randomIndex-1];
+                    document.getElementById(`battle_position_${selectedPosition}`).click(); // +1 để phù hợp với vị trí của mảng (từ 1 đến 8)
+                    console.log(`Tìm... [${selectedPosition}]`);
+                    localStorage.setItem('isNum', 'false');
+                    return;
+                }else{
+                    const positions = [position1, position2, position3, position4, position5, position6, position7, position8];
+                    const randomIndex = random(0, 1, 3, 5, 8);
+                    const selectedPosition = positions[randomIndex-1];
+                    if (selectedPosition == 0 || selectedPosition == '0'){localStorage.setItem('isNum', 'true'); return}
+                    document.getElementById(`battle_position_${selectedPosition}`).click(); // +1 để phù hợp với vị trí của mảng (từ 1 đến 8)
+                    console.log(`Tìm... [${selectedPosition}]`);
+                    localStorage.setItem('isNum', 'false');
+                }
+            }else{
+                const positions = [position1, position2, position3, position4, position5, position6, position7, position8];
+                const randomIndex = getRandomIndex(gocChay)
+                const selectedPosition = positions[randomIndex];
+                document.getElementById(`battle_position_${selectedPosition}`).click();
+                console.log(`Tìm... [${selectedPosition}]`);
+            }
+        } catch (error) {
+            console.log(error)
+            countError++
+            if (countError >= 20 && countError < 22){
+                await logCuuGioi()
+                getToken()
+            }
+            if (countError >= 25){
+                location.reload();
+            }
+        }
+    }
+    async function chayCuuVuc(){
+        if (block) return
+        isReturn = localStorage.getItem('isReturn');
+        isNum = localStorage.getItem('isNum');
+        isBlockTaiPhu = localStorage.getItem('isBlockTaiPhu');
+        countLum = localStorage.getItem('countLum');
+        token = localStorage.getItem('TOKEN');
+        isLog = localStorage.getItem('isLog');
+        chapterToken = `${token}&player=${ID}`;
+        guildQuest = localStorage.getItem('guildQuest');
+        const elements = document.getElementsByClassName('item');
+        for (var i = 0; i < elements.length; i++) {
+            if (elements[i].textContent.includes("Cửu Giới")) {
+                elements[i].click();
+                break;
+            }
+        }
+        if (isBlockLog == false) { logCuuGioi(); return }
+        if (limitGoldOut === 0 && isBlockTaiPhu !== 'true') {
+            localStorage.setItem('isBlockTaiPhu', 'true');
+        }
+        if (countLum >= maxError){
+            location.reload();
+        }
+        mainData()
+    }
+    async function checkTaiPhu(){
+        try {
+            const responseP = await fetch(`${URL}/api/battle_map_player_data?token_character=${chapterToken}&type=word`);
+            const dataP = await responseP.json();
+            const taiPhu = dataP.data
+            const otherData = JSON.parse(taiPhu);
+            const currencies = otherData.bag
+            const goldAmount = currencies.gold.amount;
+            const crystalAmount = currencies.crystal ? currencies.crystal.amount : 0;
+            const totalValue = parseInt(otherData.score.rich)
+             for (const currency in currencies) {
+                if (currency == 'medicinal_point_plus' || currency == 'medicinal_upgrade_king' || currency == 'add_option'|| currency == 'guild_boss_1' || currency == 'guild_boss_2'|| currency == 'box_book_2' || currency == 'box_book_1'|| currency == 'box_book_3' || currency.includes('box_book')) {
+                    console.log(`➙ Chạy OUT...(lụm được ${VatPhamConver[currency]}`)
+                    preLogout()}
+                       //trứng
+                if (currency == 'egg_rare'|| currency == 'egg_legendary' || currency == 'egg_dragon' || currency == 'egg_snake'|| currency == 'egg_phoenix'|| currency == 'egg_water_dragon') {
+                    console.log(`➙ Chạy OUT...(lụm được ${VatPhamConver[currency]}`)
+                    preLogout()
+                }
+            }
+            if (totalValue >= limitGoldOut && limitGoldOut !== 0) {
+                if (continuePlay == 'NO') {
+                    preLogout()
+                    return;
+                }
+                if (continuePlay == 'YES') {
+                    if (totalValue >= outLimit){
+                        preLogout()
+                        return;
+                    }
+                    localStorage.setItem('isBlockTaiPhu', 'true');
+                    const currencyDetails = [];
+                    for (const currency in currencies) {
+                        const currencyDetail = currencies[currency].amount || "Unknown";
+                        currencyDetails.push(VatPhamConver[currency] + ": " + currencyDetail);
+                    }
+                    const combinedDetails = currencyDetails.join('\n+ ');
+                    console.log(`😻\n+ ${combinedDetails}\n➙ Tài Phú: ${totalValue}`)
+                }
+            } else if (totalValue >= outLimit && limitGoldOut == 0) {
+                preLogout()
+            } else {
+                const currencyDetails = [];
+                for (const currency in currencies) {
+                    const currencyDetail = currencies[currency].amount || "Unknown";
+                    currencyDetails.push(VatPhamConver[currency] + ": " + currencyDetail);
+                }
+                const combinedDetails = currencyDetails.join('\n+ ');
+                console.log(`😻\n+ ${combinedDetails}\n➙ Tài Phú: ${totalValue}`)
+            }
+        } catch (error) {
+            console.error(error);
+        }
+    }
+    async function preLogout() {
+        console.log(` ➙ Chạy OUT...!`)
+        block = true
+        clearInterval(checkMap)
+        await outCuuGioi()
+    }
+    async function outCuuGioi(){
+        const response = await fetch(`${URL}/assets/ajax/battle_map.php`, {
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                "Sec-Fetch-Site": "same-origin",
+                "Sec-Fetch-Mode": "cors",
+                "Referer": refeLink,
+            },
+            "method": "POST",
+            "body": "action=word_exit&target=1",
+        });
+        const res = await response.text();
+        if (res.includes('game_word_history')) {
+            console.log(`➙ Out thành công..[${nameConver[loaiCuuGioi]}]`)
+            location.reload();
+        }
+    }
+    async function logCuuGioi(){
+        try {
+            const response = await fetch(`${URL}/assets/ajax/battle_map.php`, {
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                    "Sec-Fetch-Site": "same-origin",
+                    "Sec-Fetch-Mode": "cors",
+                    "Referer": refeLink,
+                },
+                "method": "POST",
+                "body": `action=join&type=word&area=${loaiCuuGioi}`,
+            });
+            const res = await response.text();
+            if (res.includes('Bạn đang trong thời gian hồi sinh')){
+                const times = res.split('second = ')[1].split(';')[0]
+                console.log(`Còn ${parseInt(times)/60} phút để vào Cửu Giới`)
+                localStorage.setItem('isLog', 'true');
+            }else if (res.includes('thành công')){
+                location.reload();
+            }else {
+                isBlockLog = true
+            }
+        } catch (error) {
+            //console.error(error);
+        }
+    }
+    async function checkSuaDo(){
+        try {
+            const response = await fetch(`${URL}/api/get_data_by_id?table=game_character&data=info,data&id=${ID}`, {
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                    "Sec-Fetch-Site": "same-origin",
+                    "Sec-Fetch-Mode": "cors",
+                    "Referer": refeLink,
+                },
+                "method": "GET",
+            });
+            const res = await response.json();
+            const deteriorateValue = JSON.parse(res.data)
+            const soBen = deteriorateValue.deteriorate;
+            if (soBen > 0) {
+                suaDo()
+            }
+            return
+        } catch (error) {
+            //console.error(error);
+        }
+    }
+    async function suaDo(){
+        try {
+            const response = await fetch(`${URL}/assets/ajax/character.php`, {
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                    "Sec-Fetch-Site": "same-origin",
+                    "Sec-Fetch-Mode": "cors",
+                    "Referer": refeLink,
+                },
+                method: "POST",
+                body: 'action=equipment_repair',
+            });
+            const res = await response.text();
+            if (res.includes('Sửa chửa thành công')) {
+                console.log(`➙ Sửa chửa thành công`)
+            }
+            return
+        } catch (error) {
+            //console.error(error);
+        }
+    }
+    async function getToken() {
+        try {
+            const responseP = await fetch(`${URL}/user/user_game_dashboard`)
+            const dataP = await responseP.text();
+            const regex = /token_character\s*=\s*'([^']+)'/;
+            const match = dataP.match(regex);
+            if (match && match[1] && match[1]) {
+                localStorage.setItem('TOKEN', match[1]);
+            }
+            return
+        } catch (error) {
+            //console.error(error);
+        }
+    }
+    async function restoreMau() {
+        if (loaiCuuGioi == 1) return
+        try {
+            const response = await fetch(`${URL}/assets/ajax/battle_map.php`, {
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                    "Sec-Fetch-Site": "same-origin",
+                    "Sec-Fetch-Mode": "cors",
+                    "Referer": refeLink,
+                },
+                "method": "POST",
+                "body": `action=restore&type=word`,
+            });
+            const res = await response.text();
+            if (res.includes('Hồi phục thành công')) {
+                console.log(`➙ ❤️️ Hồi phục thành công ❤️️`)
+            }
+            return
+        } catch (error) {
+        }
+    }
+    async function getBattle(battle_id){
+        const response = await fetch(`${URL}/api/get_data_by_id?table=game_battle&data=data&id=${battle_id}`);
+        const responseData = await response.json();
+        const parsedData = { ...JSON.parse(responseData.data) };
+        const { team, winner } = parsedData;
+        const teams = Object.keys(team);
+        const team1 = teams[0];
+        const team2 = teams[1];
+        console.log("Team1:", teams[0]);
+        console.log("Team2:", teams[1]);
+        console.log("Winner:", winner);
+        if (winner == 'monster') {
+            isBlockLog = false
+            localStorage.setItem('HISTORY', 'Bị creept cắn tử nạn!');
+            console.log(` ➙ Bị creept cắn tử nạn!`)
+        }else if (team2 == 'monster' && team1 == winner) {
+            console.log(` ➙😈 Creept...! 😈`)
+        } else if (team2 !== 'monster' && team1 == winner) {
+            console.log(` ➙🎅 Lụm Shipper..! 🎅`)
+        } else if (team2 !== 'monster' && team2 == winner) {
+            isBlockLog = false
+            localStorage.setItem('HISTORY', 'Bị bem tử nạn!');
+            console.log(` ➙ Bị bem tử nạn`)
+        }
+    }
+    async function layThongTin(data, keDich, dataP, position1, position2, position3, position4, position5, position6, position7, position8) {
+        let vitrime = ''
+        if (data.length == 8) {
+            if (parseInt(keDich) == position1 || parseInt(keDich) == position2 || parseInt(keDich) == position3) {
+                vitrime = '8canhTren'
+            }
+            if (parseInt(keDich) == position5 || parseInt(keDich) == position8) {
+                vitrime = '8canhPhai'
+            }
+            if (parseInt(keDich) == position6 || parseInt(keDich) == position7) {
+                vitrime = '8canhDuoi'
+            }
+            if (parseInt(keDich) == position4) {
+                vitrime = '8canhTrai'
+            }
+        }
+        if (data.length == 5) {
+            if (parseInt(dataP.position) > position1 && dataP.position < position2 && dataP.position < position3 && dataP.position < position4 && dataP.position < position5 && isNum !== 'true') {
+                if (parseInt(keDich) == position1 || parseInt(keDich) == position3) {
+                    vitrime = '5canhTrenTrai'
+                }
+                if (parseInt(keDich) == position2 || parseInt(keDich) == position5) {
+                    vitrime = '5canhTrenPhai'
+                }
+                if (parseInt(keDich) == position4) {
+                    vitrime = '5canhTrenDuoi'
+                }
+            }
+            if (parseInt(dataP.position) > position1 && dataP.position > position2 && dataP.position > position3 && dataP.position < position4 && dataP.position < position5 && isNum !== 'true') {
+                if (parseInt(keDich) == position1 || parseInt(keDich) == position2) {
+                    vitrime = '5canhPhaiTren'
+                }
+                if (parseInt(keDich) == position4 || parseInt(keDich) == position5) {
+                    vitrime = '5canhPhaiDuoi'
+                }
+                if (parseInt(keDich) == position3) {
+                    vitrime = '5canhPhaiTrai'
+                }
+            }
+            if (parseInt(dataP.position) > position1 && dataP.position > position2 && dataP.position < position3 && dataP.position < position4 && dataP.position < position5 && isNum !== 'true') {
+                // localStorage.setItem('isReturn', 'canhTrai');
+                if (parseInt(keDich) == position1 || parseInt(keDich) == position2) {
+                    vitrime = '5canhTraiTren'
+                }
+                if (parseInt(keDich) == position4 || parseInt(keDich) == position5) {
+                    vitrime = '5canhTraiDuoi'
+                }
+                if (parseInt(keDich) == position3) {
+                    vitrime = '5canhTraiPhai'
+                }
+            }
+            if (parseInt(dataP.position) > position1 && dataP.position > position2 && dataP.position > position3 && dataP.position > position4 && dataP.position < position5 && isNum !== 'true') {
+                if (parseInt(keDich) == position1 || parseInt(keDich) == position4) {
+                    vitrime = '5canhDuoiTrai'
+                }
+                if (parseInt(keDich) == position3 || parseInt(keDich) == position5) {
+                    vitrime = '5canhDuoiPhai'
+                }
+                if (parseInt(keDich) == position2) {
+                    vitrime = '5canhDuoiTren'
+                }
+            }
+        }
+        return vitrime
+    }
+    function rd(min, max) {
+        const random = Math.random();
+        if (random < 0.5) {
+            return min;
+        } else {
+            return max;
+        }
+    }
+    function clear(){
+        clearInterval(checkMap)
+    }
+    function checkAndReload() {
+        const itemsToCheck = ["Chức năng", "Nhân Vật", "Kỹ Năng", "Túi Đồ", "Nghề"];
+        for (const itemText of itemsToCheck) {
+            const elements = document.querySelectorAll("p");
+            let found = false;
+            elements.forEach((element) => {
+                if (element.textContent.includes(itemText)) {
+                    found = true;
+                }
+            });
+            if (!found && !document.querySelector('.user_game_module.battle_map.area')) {
+                location.reload();
+                return;
+            }
+        }
+    }
+    function randomGiay(min, max) {
+        return Math.floor(Math.random() * (max - min)) + min;
+    }
+    function getRandomIndex(gocChay) {
+        const ranges = {
+            1: [1, 2, 4],
+            2: [2, 3, 5],
+            3: [4, 6, 7],
+            4: [5, 7, 8]
+        };
+        const randomIndex = ranges[gocChay] ? ranges[gocChay][Math.floor(Math.random() * ranges[gocChay].length)] : undefined;
+        return randomIndex;
+    }
+    function randomResult(a, b, c, d) {
+        const values = [b, c, d];
+        const filteredValues = values.filter(value => value !== a);
+        if (filteredValues.length === 0) {
+            return null;
+        }
+        const randomIndex = Math.floor(Math.random() * filteredValues.length);
+        return filteredValues[randomIndex];
+    }
+    function random(min, max, val1, val2, val3) {
+        const randomValue = Math.random();
+        if (randomValue < 1/3) {
+            return val1;
+        } else if (randomValue < 2/3) {
+            return val2;
+        } else {
+            return val3;
+        }
+    }
+    function randomResultAll(viTriVP, position1, position2, position3, position4, position5, position6, position7, position8) {
+        const values = [position1, position2, position3, position4, position5, position6, position7, position8];
+        const filteredValues = values.filter(value => value !== viTriVP || value !== 0);
+        if (filteredValues.length === 0) {
+            return null;
+        }
+        const randomIndex = Math.floor(Math.random() * filteredValues.length);
+        return filteredValues[randomIndex];
+    }
+    const nameConver = {
+        1: "Địa Hải Giới (Tân Thủ)",
+        2: "Băng Nguyên Giới",
+        3: "Hoả Nguyên Giới",
+        4: "Minh Giới",
+    };
+    const VatPhamConver = {
+        "gold": "Vàng",
+        "crystal": "Linh Thạch",
+        "guild_ore": "Địa Nguyên Thạch",
+        "add_option": "Tinh Luyện Châu",
+        "equipment_upgrade": "Huyền Thiết",
+        "job_exp_3": "Thông Thạo Quyển Lv3",
+        "job_exp_2": "Thông Thạo Quyển Lv2",
+        "job_exp_1": "Thông Thạo Quyển Lv1",
+        "medicinal_exp_1": "Tăng Ích Đan Lv1",
+        "medicinal_exp_2": "Tăng Ích Đan Lv2",
+        "medicinal_exp_3": "Tăng Ích Đan Lv3",
+        "equipment_upgrade_1": "Thiên Mộc Thạch (Hạ)",
+        "equipment_upgrade_2": "Thiên Mộc Thạch (Trung)",
+        "equipment_upgrade_3": "Thiên Mộc Thạch (Thượng)",
+        "guild_quest_vegetable": "Quân Lương - Nông Sản",
+        "guild_quest_ore": "Quân Nhu - Đá",
+        "guild_quest_wood": "Quân Nhu - Gỗ",
+        "guild_quest_cloth": "Quân Nhu - Vải",
+        "guild_quest_seed": "Quân Lương - Hạt Giống",
+        "guild_quest_meat": "Quân Lương - Thịt",
+        "guild_quest_bar": "Quân Lương - Sắt",
+        "guild_quest_fish": "Quân Lương - Cá",
+        "medicinal_point_plus": "Tư Chất Đan",
+        "medicinal_upgrade_king":"Tam Sinh Quả",
+        "event_2023_red":"Bao Lì Xì"
+    };
+    var originalSend = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.send = function(data) {
+        var self = this;
+        this.addEventListener('load', async function() {
+            if (self.responseURL === `${URL}/assets/ajax/battle_map.php`) {
+                var responseData = self.responseText;
+                if (responseData.includes('Túi trữ vật đã đạt giới hạn tối đa')) {
+                    await preLogout()
+                    return
+                }
+                if (responseData.includes('popup_load')) {
+                    console.log('Đã lụm...!')
+                    localStorage.setItem('countLum', 0);
+                    localStorage.setItem('guildQuest', 0);
+                    await checkTaiPhu()
+                    delayLum.set(ID, 0);
+                    return
+                }
+                if (responseData.includes('battle_id')) {
+                    restoreMau()
+                    const battle_id = responseData.split("battle_id = '")[1].split("';frame_loa")[0]
+                    console.log('battle_id: ', battle_id)
+                    getBattle(battle_id)
+                    return
+                }
+                if (responseData.includes('Đây không phải là mục tiêu của bạn') || responseData.includes('Chỉ dành cho nhiệm vụ Tông Môn')) {
+                    console.log(`➙ Boss nhiệm vụ...[${guildQuestID}]`)
+                    localStorage.setItem('guildQuest', guildQuestID);
+                    delayLum.set(ID, 0);
+                    return
+                }
+            }
+        });
+        originalSend.call(this, data);
+    };
+    function reLoad(){
+        location.reload();
+    }
+
+    //=========END FUNCTION============
+    setInterval(checkTaiPhu, 2 * 60 * 1000);
+    setInterval(restoreMau, 2 * 60 * 1000);
+    setInterval(checkAndReload, 10000);
+    setInterval(reLoad, 15 * 60 * 1000);
+    setInterval(checkSuaDo, 5 * 60 * 1000);
+    const checkMap = setInterval(chayCuuVuc, 5000)
+    getToken()
+})();
